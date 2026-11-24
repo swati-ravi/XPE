@@ -251,7 +251,7 @@ app.js_on_event(DocumentReady, CustomJS(
     const media = window.matchMedia("(prefers-color-scheme: dark)");
 
     function updateTheme() {
-        const dark = media.matches;
+        const dark = true;
 
         const bg = dark ? "#18181b" : "#ffffff";
         const fg = dark ? "#e4e4e7" : "#27272a";
