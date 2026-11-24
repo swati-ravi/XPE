@@ -1,11 +1,10 @@
-
 import numpy as np
-import panel as pn
 
-from bokeh.plotting import figure
-from bokeh.models import ColumnDataSource, Span
-
-pn.extension("katex", sizing_mode="stretch_width")
+from pathlib import Path
+from bokeh.plotting import figure, save, output_file
+from bokeh.models import ColumnDataSource, Slider, Button, Div, CustomJS, Span
+from bokeh.layouts import column
+from bokeh.resources import INLINE
 
 # Default polarization parameters
 DEFAULT_PD = 50
@@ -17,46 +16,41 @@ phi = np.linspace(0, 360, 721)
 
 def modulation_curve(phi, pd, pa, mu):
     """Compute the normalized photoelectron angular distribution."""
-    p = pd / 100.0
-    return 1 + mu * p * np.cos(2 * np.deg2rad(phi - pa))
+    return 1 + mu * pd / 100 * np.cos(2 * np.deg2rad(phi - pa))
 
 
-# Interactive parameter sliders
-pd_slider = pn.widgets.FloatSlider(
-    name="Polarization Degree (%)",
-    start=0,
-    end=100,
-    step=1,
-    value=DEFAULT_PD
-)
+def measurement_summary(pd, pa, mu):
+    """Generate the polarization measurement summary."""
+    amplitude = mu * pd / 100
 
-pa_slider = pn.widgets.FloatSlider(
-    name="Polarization Angle (degrees)",
-    start=-90,
-    end=90,
-    step=1,
-    value=DEFAULT_PA
-)
+    return f"""
+    <h3>Measurement Summary</h3>
+    <table style="width:100%; border-collapse:collapse; line-height:2;">
+        <tr><td>Intrinsic polarization degree</td><td>{pd:.1f}%</td></tr>
+        <tr><td>Polarization angle</td><td>{pa:.1f}°</td></tr>
+        <tr><td>Instrument modulation factor</td><td>{mu:.2f}</td></tr>
+        <tr><td>Observed modulation amplitude</td><td>{100 * amplitude:.1f}%</td></tr>
+        <tr><td>Maximum normalized counts</td><td>{1 + amplitude:.2f}</td></tr>
+        <tr><td>Minimum normalized counts</td><td>{1 - amplitude:.2f}</td></tr>
+    </table>
+    """
 
-mu_slider = pn.widgets.FloatSlider(
-    name="Instrument Modulation Factor",
-    start=0,
-    end=1,
-    step=0.01,
-    value=DEFAULT_MU
-)
+
+# Application introduction
+intro = Div(text="""
+<h1>Explore X-ray Polarization</h1>
+
+<p>Investigate how the polarization properties of an astronomical source affect the distribution of photoelectron emission directions measured by an X-ray polarimeter.</p>
+
+<p>Adjust the sliders to explore the relationship between polarization degree, polarization angle, and instrumental sensitivity.</p>
+""", sizing_mode="stretch_width")
 
 # Initialize the modulation curve
-source = ColumnDataSource(
-    data={
-        "phi": phi,
-        "counts": modulation_curve(
-            phi, DEFAULT_PD, DEFAULT_PA, DEFAULT_MU
-        )
-    }
-)
+source = ColumnDataSource(data={
+    "phi": phi,
+    "counts": modulation_curve(phi, DEFAULT_PD, DEFAULT_PA, DEFAULT_MU)
+})
 
-# Configure the interactive plot
 plot = figure(
     height=380,
     x_range=(0, 360),
@@ -75,15 +69,13 @@ plot.line(
     color="#008C95"
 )
 
-plot.add_layout(
-    Span(
-        location=1,
-        dimension="width",
-        line_dash="dashed",
-        line_color="gray",
-        line_alpha=0.6
-    )
-)
+plot.add_layout(Span(
+    location=1,
+    dimension="width",
+    line_dash="dashed",
+    line_color="gray",
+    line_alpha=0.6
+))
 
 plot.xaxis.ticker = [0, 90, 180, 270, 360]
 plot.axis.axis_label_text_font_size = "12pt"
@@ -91,102 +83,173 @@ plot.axis.major_label_text_font_size = "10pt"
 plot.grid.grid_line_alpha = 0.2
 plot.outline_line_color = None
 
-results = pn.pane.Markdown("")
+# Interactive parameter sliders
+pd_slider = Slider(
+    title="Polarization Degree (%)",
+    start=0,
+    end=100,
+    step=1,
+    value=DEFAULT_PD,
+    sizing_mode="stretch_width"
+)
 
+pa_slider = Slider(
+    title="Polarization Angle (degrees)",
+    start=-90,
+    end=90,
+    step=1,
+    value=DEFAULT_PA,
+    sizing_mode="stretch_width"
+)
 
-def update(event=None):
-    """Update the modulation curve and measurement summary."""
-    pd = pd_slider.value
-    pa = pa_slider.value
-    mu = mu_slider.value
+mu_slider = Slider(
+    title="Instrument Modulation Factor",
+    start=0,
+    end=1,
+    step=0.01,
+    value=DEFAULT_MU,
+    sizing_mode="stretch_width"
+)
 
-    source.data = {
-        "phi": phi,
-        "counts": modulation_curve(phi, pd, pa, mu)
+results = Div(
+    text=measurement_summary(DEFAULT_PD, DEFAULT_PA, DEFAULT_MU),
+    sizing_mode="stretch_width"
+)
+
+# Update the curve and summary in the browser
+callback = CustomJS(
+    args=dict(
+        source=source,
+        pd_slider=pd_slider,
+        pa_slider=pa_slider,
+        mu_slider=mu_slider,
+        results=results
+    ),
+    code="""
+    const pd = pd_slider.value;
+    const pa = pa_slider.value;
+    const mu = mu_slider.value;
+    const amplitude = mu * pd / 100;
+
+    const phi = source.data.phi;
+    const counts = source.data.counts;
+
+    for (let i = 0; i < phi.length; i++) {
+        counts[i] = 1 + amplitude *
+            Math.cos(2 * (phi[i] - pa) * Math.PI / 180);
     }
 
-    amplitude = mu * pd / 100
+    source.change.emit();
 
-    results.object = f"""
-### Measurement Summary
+    results.text = `
+        <h3>Measurement Summary</h3>
+        <table style="width:100%; border-collapse:collapse; line-height:2;">
+            <tr>
+                <td>Intrinsic polarization degree</td>
+                <td>${pd.toFixed(1)}%</td>
+            </tr>
+            <tr>
+                <td>Polarization angle</td>
+                <td>${pa.toFixed(1)}°</td>
+            </tr>
+            <tr>
+                <td>Instrument modulation factor</td>
+                <td>${mu.toFixed(2)}</td>
+            </tr>
+            <tr>
+                <td>Observed modulation amplitude</td>
+                <td>${(100 * amplitude).toFixed(1)}%</td>
+            </tr>
+            <tr>
+                <td>Maximum normalized counts</td>
+                <td>${(1 + amplitude).toFixed(2)}</td>
+            </tr>
+            <tr>
+                <td>Minimum normalized counts</td>
+                <td>${(1 - amplitude).toFixed(2)}</td>
+            </tr>
+        </table>
+    `;
+    """
+)
 
-| Quantity | Value |
-|---|---:|
-| Intrinsic polarization degree | {pd:.1f}% |
-| Polarization angle | {pa:.1f}° |
-| Instrument modulation factor | {mu:.2f} |
-| Observed modulation amplitude | {100 * amplitude:.1f}% |
-| Maximum normalized counts | {1 + amplitude:.2f} |
-| Minimum normalized counts | {1 - amplitude:.2f} |
-"""
-
-
-# Register slider callbacks
 for slider in [pd_slider, pa_slider, mu_slider]:
-    slider.param.watch(update, "value")
+    slider.js_on_change("value", callback)
 
-
-reset_button = pn.widgets.Button(
-    name="Reset Parameters",
-    button_type="default"
+# Restore the default parameters
+reset_button = Button(
+    label="Reset Parameters",
+    button_type="default",
+    width=180
 )
 
+reset_button.js_on_click(CustomJS(
+    args=dict(
+        pd_slider=pd_slider,
+        pa_slider=pa_slider,
+        mu_slider=mu_slider,
+        default_pd=DEFAULT_PD,
+        default_pa=DEFAULT_PA,
+        default_mu=DEFAULT_MU
+    ),
+    code="""
+    pd_slider.value = default_pd;
+    pa_slider.value = default_pa;
+    mu_slider.value = default_mu;
+    """
+))
 
-def reset(event):
-    """Restore the default polarization parameters."""
-    pd_slider.value = DEFAULT_PD
-    pa_slider.value = DEFAULT_PA
-    mu_slider.value = DEFAULT_MU
-
-
-reset_button.on_click(reset)
-
-# Application introduction
-intro = pn.pane.Markdown("""
-# Explore X-ray Polarization
-
-Investigate how the polarization properties of an astronomical source affect the distribution of photoelectron emission directions measured by an X-ray polarimeter.
-
-Adjust the sliders to explore the relationship between polarization degree, polarization angle, and instrumental sensitivity.
-""")
-
-equation = pn.pane.LaTeX(
-    r"$f(\phi)=1+\mu p\cos[2(\phi-\psi)]$",
-    renderer="katex"
-)
+# Display the modulation equation
+equation = Div(text="""
+<hr>
+<div style="text-align:center; font-size:24px;
+            font-family:Georgia,serif; padding:15px;">
+    <i>f</i>(φ) = 1 + μ<i>p</i> cos[2(φ − ψ)]
+</div>
+""", sizing_mode="stretch_width")
 
 # Physical interpretation of the model parameters
-explanation = pn.pane.Markdown("""
-**Polarization degree (p):** The fraction of the incoming light that is linearly polarized.
+explanation = Div(text="""
+<hr>
 
-**Polarization angle (ψ):** The preferred orientation of the electric field of the linearly polarized component.
+<h3>Understanding the Parameters</h3>
 
-**Modulation factor (μ):** The instrument's modulation amplitude for a 100% polarized source.
+<p><b>Polarization degree (p):</b> The fraction of the incoming light that is linearly polarized.</p>
 
-**Photoelectron emission angle (φ):** The reconstructed initial direction of a detected photoelectron.
+<p><b>Polarization angle (ψ):</b> The preferred orientation of the electric field of the linearly polarized component.</p>
 
-The observed modulation amplitude is the product of the polarization fraction and modulation factor.
+<p><b>Modulation factor (μ):</b> The instrument's modulation amplitude for a 100% polarized source.</p>
 
-This model represents an idealized expected distribution without statistical noise.
-""")
+<p><b>Photoelectron emission angle (φ):</b> The reconstructed initial direction of a detected photoelectron.</p>
 
-# Initialize and assemble the application
-update()
+<p>The observed modulation amplitude is the product of the polarization fraction and modulation factor.</p>
 
-app = pn.Column(
+<p><i>This model represents an idealized expected distribution without statistical noise.</i></p>
+""", sizing_mode="stretch_width")
+
+# Assemble and export the standalone application
+app = column(
     intro,
     plot,
     pd_slider,
     pa_slider,
     mu_slider,
     reset_button,
-    pn.layout.Divider(),
     equation,
     results,
-    pn.layout.Divider(),
     explanation,
+    sizing_mode="stretch_width",
     max_width=900,
     margin=20
 )
 
-app.servable()
+output_path = Path(__file__).resolve().with_name("polarization_app.html")
+
+output_file(
+    str(output_path),
+    title="Interactive X-ray Polarization Explorer"
+)
+
+save(app, resources=INLINE)
+
+print(f"Application saved to {output_path}")
