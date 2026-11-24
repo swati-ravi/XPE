@@ -5,7 +5,10 @@ from bokeh.plotting import figure, save, output_file
 from bokeh.models import ColumnDataSource, Slider, Button, Div, CustomJS, Span
 from bokeh.layouts import column
 from bokeh.resources import INLINE
-from bokeh.events import DocumentReady
+from bokeh.io import curdoc
+from bokeh.core.templates import FILE
+
+curdoc().theme = "dark_minimal"
 
 # Default polarization parameters
 DEFAULT_PD = 50
@@ -41,9 +44,12 @@ def measurement_summary(pd, pa, mu):
 intro = Div(text="""
 <h1>Explore X-ray Polarization</h1>
 
-<p>Investigate how the polarization properties of an astronomical source affect the distribution of photoelectron emission directions measured by an X-ray polarimeter.</p>
+<p>Investigate how the polarization properties of an astronomical
+source affect the distribution of photoelectron emission directions
+measured by an X-ray polarimeter.</p>
 
-<p>Adjust the sliders to explore the relationship between polarization degree, polarization angle, and instrumental sensitivity.</p>
+<p>Adjust the sliders to explore the relationship between polarization
+degree, polarization angle, and instrumental sensitivity.</p>
 """, sizing_mode="stretch_width")
 
 # Initialize the modulation curve
@@ -78,11 +84,24 @@ plot.add_layout(Span(
     line_alpha=0.6
 ))
 
+# Plot styling
 plot.xaxis.ticker = [0, 90, 180, 270, 360]
 plot.axis.axis_label_text_font_size = "12pt"
 plot.axis.major_label_text_font_size = "10pt"
-plot.grid.grid_line_alpha = 0.2
+
+# Dark plot styling
+plot.background_fill_color = "#18181b"
+plot.border_fill_color = "#18181b"
 plot.outline_line_color = None
+
+plot.axis.axis_label_text_color = "#e4e4e7"
+plot.axis.major_label_text_color = "#e4e4e7"
+plot.axis.axis_line_color = "#a1a1aa"
+plot.axis.major_tick_line_color = "#a1a1aa"
+plot.axis.minor_tick_line_color = "#71717a"
+
+plot.grid.grid_line_color = "#52525b"
+plot.grid.grid_line_alpha = 0.35
 
 # Interactive parameter sliders
 pd_slider = Slider(
@@ -228,7 +247,7 @@ explanation = Div(text="""
 <p><i>This model represents an idealized expected distribution without statistical noise.</i></p>
 """, sizing_mode="stretch_width")
 
-# Assemble and export the standalone application
+# Assemble the application
 app = column(
     intro,
     plot,
@@ -244,53 +263,38 @@ app = column(
     margin=20
 )
 
-# Adapt the application to the browser color scheme
-app.js_on_event(DocumentReady, CustomJS(
-    args=dict(plot=plot),
-    code="""
-    const media = window.matchMedia("(prefers-color-scheme: dark)");
+# Apply permanent dark styling
+template = FILE.environment.from_string("""
+{% extends base %}
 
-    function updateTheme() {
-        const dark = true;
-
-        const bg = dark ? "#18181b" : "#ffffff";
-        const fg = dark ? "#e4e4e7" : "#27272a";
-        const grid = dark ? "#52525b" : "#d4d4d8";
-
-        document.body.style.backgroundColor = bg;
-        document.body.style.color = fg;
-        document.documentElement.style.colorScheme =
-            dark ? "dark" : "light";
-
-        plot.background_fill_color = bg;
-        plot.border_fill_color = bg;
-
-        for (const axis of [...plot.xaxis, ...plot.yaxis]) {
-            axis.axis_label_text_color = fg;
-            axis.major_label_text_color = fg;
-            axis.axis_line_color = fg;
-            axis.major_tick_line_color = fg;
-            axis.minor_tick_line_color = fg;
-        }
-
-        for (const g of plot.grid) {
-            g.grid_line_color = grid;
-            g.grid_line_alpha = dark ? 0.35 : 0.5;
-        }
+{% block preamble %}
+<style>
+    html, body {
+        background-color: #18181b;
+        color: #e4e4e7;
+        color-scheme: dark;
+        margin: 0;
+        font-family: Arial, sans-serif;
     }
 
-    updateTheme();
-    media.addEventListener("change", updateTheme);
-    """
-))
+    hr {
+        border: none;
+        border-top: 1px solid #52525b;
+    }
+</style>
+{% endblock %}
+""")
 
-output_path = Path(__file__).resolve().with_name("polarization_app.html")
+# Export the standalone application
+output_path = Path(__file__).resolve().with_name(
+    "polarization_app.html"
+)
 
 output_file(
     str(output_path),
     title="Interactive X-ray Polarization Explorer"
 )
 
-save(app, resources=INLINE)
+save(app, resources=INLINE, template=template)
 
 print(f"Application saved to {output_path}")
