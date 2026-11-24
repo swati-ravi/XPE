@@ -5,6 +5,7 @@ from bokeh.plotting import figure, save, output_file
 from bokeh.models import ColumnDataSource, Slider, Button, Div, CustomJS, Span
 from bokeh.layouts import column
 from bokeh.resources import INLINE
+from bokeh.events import DocumentReady
 
 # Default polarization parameters
 DEFAULT_PD = 50
@@ -66,7 +67,7 @@ plot.line(
     "counts",
     source=source,
     line_width=3,
-    color="#008C95"
+    color="#14B8A6"
 )
 
 plot.add_layout(Span(
@@ -242,6 +243,46 @@ app = column(
     max_width=900,
     margin=20
 )
+
+# Adapt the application to the browser color scheme
+app.js_on_event(DocumentReady, CustomJS(
+    args=dict(plot=plot),
+    code="""
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+
+    function updateTheme() {
+        const dark = media.matches;
+
+        const bg = dark ? "#18181b" : "#ffffff";
+        const fg = dark ? "#e4e4e7" : "#27272a";
+        const grid = dark ? "#52525b" : "#d4d4d8";
+
+        document.body.style.backgroundColor = bg;
+        document.body.style.color = fg;
+        document.documentElement.style.colorScheme =
+            dark ? "dark" : "light";
+
+        plot.background_fill_color = bg;
+        plot.border_fill_color = bg;
+
+        for (const axis of [...plot.xaxis, ...plot.yaxis]) {
+            axis.axis_label_text_color = fg;
+            axis.major_label_text_color = fg;
+            axis.axis_line_color = fg;
+            axis.major_tick_line_color = fg;
+            axis.minor_tick_line_color = fg;
+        }
+
+        for (const g of plot.grid) {
+            g.grid_line_color = grid;
+            g.grid_line_alpha = dark ? 0.35 : 0.5;
+        }
+    }
+
+    updateTheme();
+    media.addEventListener("change", updateTheme);
+    """
+))
 
 output_path = Path(__file__).resolve().with_name("polarization_app.html")
 
