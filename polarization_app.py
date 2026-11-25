@@ -7,6 +7,7 @@ from bokeh.layouts import column
 from bokeh.resources import INLINE
 from bokeh.io import curdoc
 from bokeh.core.templates import FILE
+from bokeh.events import DocumentReady
 
 curdoc().theme = "dark_minimal"
 
@@ -65,9 +66,20 @@ plot = figure(
     x_axis_label="Photoelectron Emission Angle (degrees)",
     y_axis_label="Normalized Counts",
     sizing_mode="stretch_width",
-    width_policy="max",
-    toolbar_location=None
+    width_policy="fixed",
+    width=1200,
+    margin=20,
+    toolbar_location="right",
+    tools="pan,box_zoom,wheel_zoom,save,reset,hover",
+    tooltips=[
+        ("Emission Angle", "@phi{0.0}°"),
+        ("Normalized Counts", "@counts{0.000}")
+    ]
 )
+
+# Toolbar styling
+plot.toolbar.logo = None
+plot.toolbar.autohide = False
 
 plot.line(
     "phi",
@@ -312,6 +324,23 @@ output_path = Path(__file__).resolve().with_name(
 output_file(
     str(output_path),
     title="Interactive X-ray Polarization Explorer"
+)
+
+app.js_on_event(
+    DocumentReady,
+    CustomJS(
+        args=dict(app=app),
+        code="""
+        function resizeApp() {
+            const width = Math.max(200, window.innerWidth - 40);
+            app.width = width;
+            app.change.emit();
+        }
+
+        window.addEventListener("resize", resizeApp);
+        resizeApp();
+        """
+    )
 )
 
 save(app, resources=INLINE, template=template)
