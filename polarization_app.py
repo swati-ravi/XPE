@@ -59,12 +59,14 @@ source = ColumnDataSource(data={
 })
 
 plot = figure(
-    height=380,
+    aspect_ratio=2.5,
+    min_height=280,
+    max_height=650,
     x_range=(0, 360),
     y_range=(0, 2.1),
     x_axis_label="Photoelectron Emission Angle (degrees)",
     y_axis_label="Normalized Counts",
-    sizing_mode="stretch_width",
+    sizing_mode="scale_width",
     toolbar_location=None
 )
 
@@ -248,6 +250,7 @@ explanation = Div(text="""
 """, sizing_mode="stretch_width")
 
 # Assemble the application
+# Assemble the application
 app = column(
     intro,
     plot,
@@ -259,7 +262,6 @@ app = column(
     results,
     explanation,
     sizing_mode="stretch_width",
-    max_width=900,
     margin=20
 )
 
