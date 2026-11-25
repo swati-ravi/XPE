@@ -59,14 +59,13 @@ source = ColumnDataSource(data={
 })
 
 plot = figure(
-    aspect_ratio=2.5,
-    min_height=280,
-    max_height=650,
+    height=450,
     x_range=(0, 360),
     y_range=(0, 2.1),
     x_axis_label="Photoelectron Emission Angle (degrees)",
     y_axis_label="Normalized Counts",
-    sizing_mode="scale_width",
+    sizing_mode="stretch_width",
+    width_policy="max",
     toolbar_location=None
 )
 
@@ -250,7 +249,6 @@ explanation = Div(text="""
 """, sizing_mode="stretch_width")
 
 # Assemble the application
-# Assemble the application
 app = column(
     intro,
     plot,
@@ -262,21 +260,34 @@ app = column(
     results,
     explanation,
     sizing_mode="stretch_width",
-    margin=20
+    width_policy="max",
+    margin=0
 )
 
-# Apply permanent dark styling
+# Apply dark styling
 template = FILE.environment.from_string("""
 {% extends base %}
 
 {% block preamble %}
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
 <style>
     html, body {
+        width: 100%;
+        max-width: none;
+        margin: 0;
+        padding: 0;
         background-color: #18181b;
         color: #e4e4e7;
         color-scheme: dark;
-        margin: 0;
         font-family: Arial, sans-serif;
+    }
+
+    #app-container {
+        width: 100%;
+        max-width: none;
+        padding: 20px;
+        box-sizing: border-box;
     }
 
     hr {
@@ -284,6 +295,12 @@ template = FILE.environment.from_string("""
         border-top: 1px solid #52525b;
     }
 </style>
+{% endblock %}
+
+{% block contents %}
+<div id="app-container">
+    {{ super() }}
+</div>
 {% endblock %}
 """)
 
